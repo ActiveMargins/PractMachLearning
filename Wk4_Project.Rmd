@@ -1,0 +1,122 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Load Libraries
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(corrr)
+library(rattle)
+library(randomForest)
+```
+ 
+Load data
+```{r}
+training <- read.csv("~/R_data/Coursera/PracticalMachineLearning/pml-training.csv")
+testing <-  read.csv("~/R_data/Coursera/PracticalMachineLearning/pml-testing.csv")
+
+training$classe <- as.factor(training$classe)
+```
+
+Remove some columns with near-zero variance
+```{r}
+NZV_index <- nearZeroVar(training)
+training <- training[,-NZV_index]
+testing <- testing[,-NZV_index]
+
+print(paste(length(NZV_index),"columns removed due to near-zero variance"))
+```
+
+Remove columns that are >95% NA 
+```{r}
+NA_index <- apply(training,2,function(x) sum(is.na(x)))>19000
+training <- training[,NA_index==FALSE]
+testing <- testing[,NA_index==FALSE]
+
+print(paste(length(NA_index),"columns removed due to being mainly NA values (>95% NA's)"))
+```
+
+Remove some columns that are of no use to us in prediction (e.g., user number)
+```{r}
+training <- training %>%
+  select(-X,-user_name,-raw_timestamp_part_1,-raw_timestamp_part_2,-cvtd_timestamp,-num_window)
+
+testing <- testing %>%
+  select(-X,-user_name,-raw_timestamp_part_1,-raw_timestamp_part_2,-cvtd_timestamp,-num_window)
+```
+
+Split training data (currently 19622 rows) in to training (tr_tr) and cross validation  datasets (tr_cv) 
+```{r}
+inTrain <- createDataPartition(training$classe, p=0.6)[[1]]
+tr_tr <- training[inTrain,]
+tr_cv <- training[-inTrain,]
+```
+
+We can see that the feature that we are predicting (classe) is balanced across our training dataset (tr_tr) 
+```{r}
+plot(tr_tr$classe, main="Levels of the variable classe", xlab="classe levels", ylab="Frequency")
+```
+
+Looking at the correaltion data below, we can see that there are some pretty strongly correlated features. Acceleration of the belt in the y direction (accel_belt_y) is highly correlated with the roll of the belt (roll_belt). This makes sense, these two measurements are very similar. So if we don't get very  good model fit, or feel like we are over tuning the model, we could remove some of the features. 
+```{r}
+tr_cor <- correlate(tr_tr[,1:52]) 
+tr_cor %>% shave()
+tr_cor %>% rplot()
+```
+
+The first approcCreate a Decision Model through caret using default settings to start
+```{r}
+modDT <- train(classe~.,data=tr_tr, method="rpart")
+predDT <- predict(modDT, newdata=tr_cv)
+
+cmDT <- confusionMatrix(predDT,tr_cv$classe)
+cmDT$table
+```
+
+Looking at the structure of the decision tree we can see that ____ is the strongest feature 
+```{r}
+fancyRpartPlot(modDT$finalModel,sub="")
+```
+
+
+Create a standard Random Forest Model through caret composed of 100 trees
+The random forest model does much better than the decision tree. 
+```{r}
+modRF <- train(classe~.,data=tr_tr, method="rf", ntree=100)
+predRF <- predict(modRF, newdata=tr_cv)
+
+cmRF <- confusionMatrix(predRF,tr_cv$classe)
+cmRF$table
+```
+The random forest model is using many of the same features as the  
+```{r}
+varImpPlot(modRF$finalModel, main ='Feature importance')
+```
+
+
+Create a Gradient boosted model through caret
+```{r}
+modGB <- train(classe~.,data=tr_tr, method="gbm", verbose=FALSE)
+predGB <- predict(modGB, newdata=tr_cv)
+
+cmGB <- confusionMatrix(predGB,tr_cv$classe)
+cmGB$table
+```
+
+Create a table of the accuracy to compare the models.
+```{r}
+accTable <- rbind(cmDT$overall[1:4],cmRF$overall[1:4],cmGB$overall[1:4])
+row.names(accTable) <- c("Decision Tree","Random Forest","Gradient Boots")
+print(accTable)
+```
+
+From this we can see that the random forest model is the most accurate. We will apply this model to the blind test dataset and predict the categories.
+```{r}
+predTestRF <- predict(modRF, newdata=testing)
+print(predTestRF)
+
+```
+
+
