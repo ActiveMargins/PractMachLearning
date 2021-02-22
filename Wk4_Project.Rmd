@@ -1,8 +1,7 @@
 ---
 title: "How well do you lift weights?"
 output:
-  html_document:
-    df_print: paged
+  output=github_document
 ---
 
 Wearable fitness trackers (e.g., Jawbone Up, Nike FuelBand, and Fitbit) are very popular pieces of tech. They record the duration, distance, and vigor of exercise through the use of accelerometers and other position sensors. Many users use these data to quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
